@@ -9,12 +9,12 @@ pygame.display.set_caption("Ярославская Змейка")
 pygame.font.init()
 random.seed()
 
-SNAKE_SPEED = 2
-BLOCK_SIZE = 20
+SNAKE_SPEED = 3
+BLOCK_SIZE = 45
 FRUIT_SIZE = BLOCK_SIZE
 GAP = 10
 SCREEN_DIMENSION = 600
-FPS_LIMIT = 10
+FPS_LIMIT = 15
 
 KEY_MAPPING = {'UP': 1, 'DOWN': 2, 'LEFT': 3, 'RIGHT': 4}
 fruits = []
@@ -72,15 +72,119 @@ def check_boundaries(snake):
         snake.y = SCREEN_DIMENSION - BLOCK_SIZE
 
 
+def load_image(name, colorkey=None, size=None):
+    fullname = os.path.join('data', name)
+    if not os.path.isfile(fullname):
+        print(f"Файл с изображением '{fullname}' не найден")
+        sys.exit()
+    image = pygame.image.load(fullname)
+    if colorkey is not None:
+        image = image.convert()
+        if colorkey == -1:
+            colorkey = image.get_at((0, 0))
+        image.set_colorkey(colorkey)
+    else:
+        image = image.convert_alpha()
+
+    # Изменение размера изображения, если указан параметр size
+    if size is not None:
+        image = pygame.transform.scale(image, size)
+
+    return image
+
+
+class SnakeBodySprite(pygame.sprite.Sprite):
+    def __init__(self, x, y, size=(BLOCK_SIZE, BLOCK_SIZE)):
+        super().__init__()
+        self.image = load_image("snakebody2.png", size=(BLOCK_SIZE, BLOCK_SIZE))
+        self.current_direction = 1
+        self.rect = self.image.get_rect()
+        self.rect.topleft = (x, y)
+
+    def update(self, x, y, direction):
+        # поворот тела в правильном направлении
+        if self.current_direction != direction:
+            if self.current_direction == KEY_MAPPING['UP']:
+                if direction == KEY_MAPPING['LEFT']:
+                    self.image = pygame.transform.rotate(self.image, 90)
+                elif direction == KEY_MAPPING['RIGHT']:
+                    self.image = pygame.transform.rotate(self.image, -90)
+            elif self.current_direction == KEY_MAPPING['RIGHT']:
+                if direction == KEY_MAPPING['UP']:
+                    self.image = pygame.transform.rotate(self.image, 90)
+                elif direction == KEY_MAPPING['DOWN']:
+                    self.image = pygame.transform.rotate(self.image, -90)
+            elif self.current_direction == KEY_MAPPING['DOWN']:
+                if direction == KEY_MAPPING['RIGHT']:
+                    self.image = pygame.transform.rotate(self.image, 90)
+                elif direction == KEY_MAPPING['LEFT']:
+                    self.image = pygame.transform.rotate(self.image, -90)
+            elif self.current_direction == KEY_MAPPING['LEFT']:
+                if direction == KEY_MAPPING['DOWN']:
+                    self.image = pygame.transform.rotate(self.image, 90)
+                elif direction == KEY_MAPPING['UP']:
+                    self.image = pygame.transform.rotate(self.image, -90)
+            self.current_direction = direction
+        self.rect.topleft = (x, y)
+
+
+class SnakeHeadSprite(pygame.sprite.Sprite):
+    def __init__(self, x, y, size=(BLOCK_SIZE, BLOCK_SIZE)):
+        super().__init__()
+        self.image = load_image("snakehead2.png", size=(BLOCK_SIZE, BLOCK_SIZE))
+        self.current_direction = 1
+        self.rect = self.image.get_rect()
+        self.rect.topleft = (x, y)
+
+    def update(self, x, y, direction):
+        # поворот тела в правильном направлении
+        if self.current_direction != direction:
+            if self.current_direction == KEY_MAPPING['UP']:
+                if direction == KEY_MAPPING['LEFT']:
+                    self.image = pygame.transform.rotate(self.image, 90)
+                elif direction == KEY_MAPPING['RIGHT']:
+                    self.image = pygame.transform.rotate(self.image, -90)
+            elif self.current_direction == KEY_MAPPING['RIGHT']:
+                if direction == KEY_MAPPING['UP']:
+                    self.image = pygame.transform.rotate(self.image, 90)
+                elif direction == KEY_MAPPING['DOWN']:
+                    self.image = pygame.transform.rotate(self.image, -90)
+            elif self.current_direction == KEY_MAPPING['DOWN']:
+                if direction == KEY_MAPPING['RIGHT']:
+                    self.image = pygame.transform.rotate(self.image, 90)
+                elif direction == KEY_MAPPING['LEFT']:
+                    self.image = pygame.transform.rotate(self.image, -90)
+            elif self.current_direction == KEY_MAPPING['LEFT']:
+                if direction == KEY_MAPPING['DOWN']:
+                    self.image = pygame.transform.rotate(self.image, 90)
+                elif direction == KEY_MAPPING['UP']:
+                    self.image = pygame.transform.rotate(self.image, -90)
+            self.current_direction = direction
+        self.rect.topleft = (x, y)
+
+
+class FruitSprite(pygame.sprite.Sprite):
+    def __init__(self, x, y, size=(FRUIT_SIZE, FRUIT_SIZE)):
+        super().__init__()
+        self.image = load_image("donat.png", size=(FRUIT_SIZE, FRUIT_SIZE))
+        self.rect = self.image.get_rect()
+        self.rect.topleft = (x, y)
+
+    def update(self, x, y):
+        self.rect.topleft = (x, y)
+
+
 class Fruit:
     def __init__(self, x, y, state):
-        self.x = int(x)
-        self.y = int(y)
+        self.x = x
+        self.y = y
         self.state = state
-        self.color = pygame.Color('red')
+        self.sprite = FruitSprite(self.x, self.y, size=(FRUIT_SIZE, FRUIT_SIZE))
 
     def draw(self, surface):
-        pygame.draw.rect(surface, self.color, (self.x, self.y, FRUIT_SIZE, FRUIT_SIZE))
+        if self.state == 1:
+            self.sprite.update(self.x, self.y)
+            surface.blit(self.sprite.image, self.sprite.rect)
 
 
 class SnakeSegment:
@@ -99,10 +203,19 @@ class Snake:
         self.body = []
         self.body.append(self)
 
-        tail_segment = SnakeSegment(self.x, self.y + GAP)
-        tail_segment.direction = KEY_MAPPING['UP']
-        tail_segment.color = 'NULL'
-        self.body.append(tail_segment)
+        # Спрайты для змейки
+        self.sprite_group = pygame.sprite.Group()
+        self.head_sprite = SnakeHeadSprite(self.x, self.y, size=(BLOCK_SIZE, BLOCK_SIZE))
+        self.sprite_group.add(self.head_sprite)
+
+        # Добавляем начальные сегменты тела
+        for i in range(1, 4):  # Начальная длина змейки (3 сегмента)
+            tail_segment = SnakeSegment(self.x, self.y + i * GAP)
+            tail_segment.direction = KEY_MAPPING['UP']
+            tail_segment.color = 'NULL'
+            self.body.append(tail_segment)
+            body_sprite = SnakeBodySprite(tail_segment.x, tail_segment.y, size=(BLOCK_SIZE, BLOCK_SIZE))
+            self.sprite_group.add(body_sprite)
 
     def move(self):
         last_index = len(self.body) - 1
@@ -129,6 +242,15 @@ class Snake:
 
         self.body.insert(0, last_segment)
 
+        # Обновление спрайтов
+        for i, segment in enumerate(self.body):
+            if i == 0:
+                self.head_sprite.update(segment.x, segment.y, self.direction)
+            else:
+                # Обновляем спрайты тела
+                body_sprite = list(self.sprite_group)[i]
+                body_sprite.update(segment.x, segment.y, segment.direction)
+
     def grow(self):
         last_index = len(self.body) - 1
         self.body[last_index].direction = self.body[last_index].direction
@@ -144,6 +266,10 @@ class Snake:
             new_segment.x -= BLOCK_SIZE
 
         self.body.append(new_segment)
+
+        # Добавляем спрайт для нового сегмента
+        body_sprite = SnakeBodySprite(new_segment.x, new_segment.y, size=(BLOCK_SIZE, BLOCK_SIZE))
+        self.sprite_group.add(body_sprite)
 
     def set_direction(self, direction):
         if (self.direction == KEY_MAPPING["RIGHT"] and direction == KEY_MAPPING["LEFT"]) or \
@@ -165,10 +291,8 @@ class Snake:
         return False
 
     def draw(self, surface):
-        pygame.draw.rect(surface, pygame.Color('yellow'), (self.body[0].x, self.body[0].y, BLOCK_SIZE, BLOCK_SIZE), 0)
-        for segment in self.body[1:]:
-            if segment.color != 'NULL':
-                pygame.draw.rect(surface, pygame.Color('white'), (segment.x, segment.y, BLOCK_SIZE, BLOCK_SIZE), 0)
+        self.sprite_group.draw(surface)
+
 
 def get_input():
     for event in pygame.event.get():
@@ -190,6 +314,7 @@ def get_input():
         if event.type == pygame.QUIT:
             exit_game()
 
+
 def respawn_fruits(snake_x, snake_y):
     radius = math.sqrt((SCREEN_DIMENSION / 2) ** 2 + (SCREEN_DIMENSION / 2) ** 2) / 2
     fruits.clear()
@@ -203,10 +328,12 @@ def respawn_fruits(snake_x, snake_y):
     new_fruit = Fruit(x - x % BLOCK_SIZE, y - y % BLOCK_SIZE, 1)
     fruits.append(new_fruit)
 
+
 def display_score(current_score):
     score_number = font_score_num.render(str(current_score), True, pygame.Color('red'))
     display.blit(score_text, (SCREEN_DIMENSION - score_text_size[0] - 60, 10))
     display.blit(score_number, (SCREEN_DIMENSION - 45, 14))
+
 
 def display_game_time(game_time):
     time_text = font_score.render('Time: ', True, pygame.Color('red'))
@@ -214,11 +341,17 @@ def display_game_time(game_time):
     display.blit(time_text, (30, 10))
     display.blit(time_number, (105, 14))
 
+
 def main():
     score = 0
     player_snake = Snake(SCREEN_DIMENSION / 2 - SCREEN_DIMENSION / 2 % BLOCK_SIZE,
                          SCREEN_DIMENSION / 2 - SCREEN_DIMENSION / 2 % BLOCK_SIZE)
     player_snake.set_direction(KEY_MAPPING["UP"])
+
+    # Добавляем начальные сегменты тела
+    for _ in range(3):
+        player_snake.grow()
+        player_snake.move()
 
     for _ in range(3):
         player_snake.grow()
@@ -273,7 +406,7 @@ def main():
 
         current_time = pygame.time.get_ticks() - start_time
         display_game_time(current_time)
-        print(player_snake.x, player_snake.y, fruit.x, fruit.y)
+        #print(player_snake.x, player_snake.y, fruit.x, fruit.y)
 
         pygame.display.flip()
 
@@ -281,5 +414,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
